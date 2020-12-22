@@ -24,8 +24,6 @@ app.get('/imagen/:tipo/:img', verificaTokenImg, (req, res) => {
         res.sendFile(noImagePath);
     }
 
-
-
 });
 
 module.exports = app;
