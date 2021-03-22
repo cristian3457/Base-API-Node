@@ -1,7 +1,7 @@
 {
-    "name": "base_api",
+    "name": "pochos_store_api",
     "version": "1.0.0",
-    "description": "Proyecto base para una API con Node",
+    "description": "API Pochos Store",
     "main": "index.js",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",

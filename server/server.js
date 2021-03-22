@@ -23,6 +23,7 @@ app.use(bodyParser.json());
 
 // Configuración global de rutas
 app.use(require('./routes/index'));
+app.use('/uploads', express.static('uploads'));
 
 mongoose.connection.openUri(process.env.URLDB, { useUnifiedTopology: true, useNewUrlParser: true, useCreateIndex: true }, (err, res) => {
 

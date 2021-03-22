@@ -1,131 +1,209 @@
-const express = require('express');
-const fileUpload = require('express-fileupload');
-const app = express();
+var express = require('express');
 
-const Usuario = require('../models/usuario');
+var fileUpload = require('express-fileupload');
+var fs = require('fs');
 
-const fs = require('fs');
-const path = require('path');
+var app = express();
 
+var StockProducto = require('../models/stockProducto');
+var Producto = require('../models/producto');
+var Color = require('../models/color');
 
 // default options
 app.use(fileUpload());
 
+app.put('/upload/:tipo/:id/:campo', (req, res, next) => {
 
-app.put('/upload/:tipo/:id', function(req, res) {
-
-    let tipo = req.params.tipo;
-    let id = req.params.id;
-
-    if (!req.files) {
-        return res.status(400)
-            .json({
-                ok: false,
-                err: {
-                    message: 'No se ha seleccionado ningún archivo'
-                }
-            });
-    }
-
-    // Valida tipo
-    let tiposValidos = ['usuarios'];
+    var tipo = req.params.tipo;
+    var id = req.params.id;
+    let campo = req.params.campo;
+    //tipos de colecciones
+    var tiposValidos = ['stocks', 'productos', 'colores'];
     if (tiposValidos.indexOf(tipo) < 0) {
         return res.status(400).json({
             ok: false,
-            err: {
-                message: 'Los tipos permitidas son ' + tiposValidos.join(', ')
-            }
-        })
+            mensaje: 'Tipo de coleccion no valido',
+            errors: { message: 'El tipo de coleccion no se encuentra entre los tipos validos' }
+        });
     }
-
-    let archivo = req.files.archivo;
-    let nombreCortado = archivo.name.split('.');
-    let extension = nombreCortado[nombreCortado.length - 1];
-
-    // Extensiones permitidas
-    let extensionesValidas = ['png', 'jpg', 'gif', 'jpeg'];
-
-    if (extensionesValidas.indexOf(extension) < 0) {
+    //verifica si seleccionaron archivo
+    if (!req.files) {
         return res.status(400).json({
             ok: false,
-            err: {
-                message: 'Las extensiones permitidas son ' + extensionesValidas.join(', '),
-                ext: extension
-            }
-        })
+            mensaje: 'No selecciono nada',
+            errors: { message: 'Debes seleccionar un archivo' }
+        });
     }
 
-    // Cambiar nombre al archivo
-    let nombreArchivo = `${ id }-${ new Date().getMilliseconds()  }.${ extension }`;
+    //obtener nombre del archivo
+    var archivo = req.files.archivo1;
+    var nombreCortado = archivo.name.split('.');
+    var extensionArchivo = nombreCortado[nombreCortado.length - 1];
 
-    archivo.mv(`uploads/${ tipo }/${ nombreArchivo }`, (err) => {
+    //extensiones aceptadas
+    var extencionesValidas = ['png', 'jpg', 'jpeg', 'PNG', 'JPG', 'JPEG', 'webp', 'WEBP'];
 
-        if (err)
-            return res.status(500).json({
-                ok: false,
-                err
-            });
+    if (extencionesValidas.indexOf(extensionArchivo) < 0) {
+        return res.status(400).json({
+            ok: false,
+            mensaje: 'Extencion no valida',
+            errors: { message: 'Las extenciones validas son ' + extencionesValidas.join(', ') }
+        });
+    }
 
-        // Aqui, imagen cargada
-        if (tipo === 'usuarios') {
-            imagenUsuario(id, res, nombreArchivo);
-        }
+    //nombre de archivo personalizado
+    var nombreArchivo = `${ id }-${new Date().getMilliseconds()}.${extensionArchivo}`;
+    //mover archivo a un path especifico
+    var path = `./uploads/${ tipo }/${nombreArchivo}`;
 
-    });
-
-});
-
-function imagenUsuario(id, res, nombreArchivo) {
-
-    Usuario.findById(id, (err, usuarioDB) => {
-
+    archivo.mv(path, err => {
         if (err) {
-            borraArchivo(nombreArchivo, 'usuarios');
-
-            return res.status(500).json({
-                ok: false,
-                err
-            });
-        }
-
-        if (!usuarioDB) {
-
-            borraArchivo(nombreArchivo, 'usuarios');
-
             return res.status(400).json({
                 ok: false,
-                err: {
-                    message: 'Usuaro no existe'
-                }
+                mensaje: 'Error al mover archivo',
+                errors: err
             });
         }
 
-        borraArchivo(usuarioDB.img, 'usuarios')
+        if (tipo === 'stocks') {
+            imagenStockProducto(id, res, nombreArchivo, campo);
+        } else if (tipo === 'productos') {
+            imagenProducto(id, res, nombreArchivo, campo);
+        } else if (tipo === 'colores') {
+            imagenColor(id, res, nombreArchivo, campo);
+        }
 
-        usuarioDB.img = nombreArchivo;
+    })
+});
 
-        usuarioDB.save((err, usuarioGuardado) => {
-
-            res.json({
-                ok: true,
-                usuario: usuarioGuardado,
-                img: nombreArchivo
+function imagenProducto(id, res, nombreArchivo, campo) {
+    Producto.findById(id, (err, producto) => {
+        if (err) {
+            borraArchivo(nombreArchivo, 'productos');
+            return res.status(500).json({
+                ok: false,
+                mensaje: 'Error al consultar productos',
+                errors: err
             });
+        }
+        if (!producto) {
+            borraArchivo(nombreArchivo, 'productos');
+            return res.status(500).json({
+                ok: false,
+                mensaje: 'No se encontro ningun producto con ese id',
+                errors: { message: 'no se encontro ningun producto con el id ' + id }
+            });
+        }
+        borraArchivo(producto.img, 'productos');
+        if (campo == 'img') {
+            producto.img = nombreArchivo;
+        }
 
+        producto.save((err, productoActualizado) => {
+            if (err) {
+                return res.status(500).json({
+                    ok: false,
+                    mensaje: 'Error al actualizar producto',
+                    errors: err
+                });
+            }
+            res.status(200).json({
+                ok: true,
+                mensaje: 'Archivo de producto actualizado',
+                producto: productoActualizado
+            });
         });
 
+    });
+}
+
+function imagenColor(id, res, nombreArchivo, campo) {
+    Color.findById(id, (err, color) => {
+        if (err) {
+            borraArchivo(nombreArchivo, 'colores');
+            return res.status(500).json({
+                ok: false,
+                mensaje: 'Error al consultar colores',
+                errors: err
+            });
+        }
+        if (!color) {
+            borraArchivo(nombreArchivo, 'colores');
+            return res.status(500).json({
+                ok: false,
+                mensaje: 'No se encontro ningun color con ese id',
+                errors: { message: 'no se encontro ningun color con el id ' + id }
+            });
+        }
+        borraArchivo(color.img, 'colores');
+        if (campo == 'img') {
+            color.img = nombreArchivo;
+        }
+
+        color.save((err, colorActualizado) => {
+            if (err) {
+                return res.status(500).json({
+                    ok: false,
+                    mensaje: 'Error al actualizar color',
+                    errors: err
+                });
+            }
+            res.status(200).json({
+                ok: true,
+                mensaje: 'Archivo de color actualizado',
+                color: colorActualizado
+            });
+        });
 
     });
+}
 
+function imagenStockProducto(id, res, nombreArchivo, campo) {
+    StockProducto.findById(id, (err, stock) => {
+        if (err) {
+            borraArchivo(nombreArchivo, 'stocks');
+            return res.status(500).json({
+                ok: false,
+                mensaje: 'Error al consultar stocks',
+                errors: err
+            });
+        }
+        if (!stock) {
+            borraArchivo(nombreArchivo, 'stocks');
+            return res.status(500).json({
+                ok: false,
+                mensaje: 'No se encontro ningun stock con ese id',
+                errors: { message: 'no se encontro ningun stock con el id ' + id }
+            });
+        }
+        borraArchivo(stock.img, 'stocks');
+        if (campo == 'img') {
+            stock.img = nombreArchivo;
+        }
 
+        stock.save((err, stockActualizado) => {
+            if (err) {
+                return res.status(500).json({
+                    ok: false,
+                    mensaje: 'Error al actualizar stock',
+                    errors: err
+                });
+            }
+            res.status(200).json({
+                ok: true,
+                mensaje: 'Archivo de stock actualizada',
+                stock: stockActualizado
+            });
+        });
+
+    });
 }
 
 function borraArchivo(nombreImagen, tipo) {
 
-    let pathImagen = path.resolve(__dirname, `../../uploads/${ tipo }/${ nombreImagen }`);
+    let pathImagen = `./uploads/${ tipo }/${ nombreImagen }`;
     if (fs.existsSync(pathImagen)) {
         fs.unlinkSync(pathImagen);
     }
 }
-
 module.exports = app;
